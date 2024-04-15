@@ -126,9 +126,21 @@ async def send_data_to_subscribers(user_id: int, data):
 
 @app.post("/processed_agent_data/")
 async def create_processed_agent_data(data: List[ProcessedAgentData]):
-    # Insert data to database
-    # Send data to subscribers
-    pass
+    with SessionLocal() as session:
+        for i in data:
+            fresh_i = processed_agent_data.insert().values(
+                road_state=i.road_state,
+                user_id=i.agent_data.user_id,
+                x=i.agent_data.accelerometer.x,
+                y=i.agent_data.accelerometer.y,
+                z=i.agent_data.accelerometer.z,
+                latitude=i.agent_data.gps.latitude,
+                longitude=i.agent_data.gps.longitude,
+                timestamp=i.agent_data.timestamp,
+            )
+            session.execute(fresh_i)
+            session.commit()
+        return data
 
 
 @app.get(
@@ -136,14 +148,20 @@ async def create_processed_agent_data(data: List[ProcessedAgentData]):
     response_model=ProcessedAgentDataInDB,
 )
 def read_processed_agent_data(processed_agent_data_id: int):
-    # Get data by id
-    pass
+    with SessionLocal() as session:
+        output = (session.query(processed_agent_data)
+                  .filter(processed_agent_data.c.id == processed_agent_data_id)
+                  .first())
+        if output is None:
+            raise HTTPException(status_code=404, detail="Item not found")
+    return output
 
 
 @app.get("/processed_agent_data/", response_model=list[ProcessedAgentDataInDB])
 def list_processed_agent_data():
-    # Get list of data
-    pass
+    with SessionLocal() as session:
+        output = session.query(processed_agent_data).all()
+    return output
 
 
 @app.put(
@@ -151,8 +169,26 @@ def list_processed_agent_data():
     response_model=ProcessedAgentDataInDB,
 )
 def update_processed_agent_data(processed_agent_data_id: int, data: ProcessedAgentData):
-    # Update data
-    pass
+    with SessionLocal() as session:
+        query = (
+            processed_agent_data.update()
+            .where(processed_agent_data.c.id == processed_agent_data_id)
+            .values(
+                road_state=data.road_state,
+                user_id=data.agent_data.user_id,
+                x=data.agent_data.accelerometer.x,
+                y=data.agent_data.accelerometer.y,
+                z=data.agent_data.accelerometer.z,
+                latitude=data.agent_data.gps.latitude,
+                longitude=data.agent_data.gps.longitude,
+                timestamp=data.agent_data.timestamp,
+            )
+            .returning(*processed_agent_data.columns)
+        )
+        result = session.execute(query)
+        updated_data = result.fetchone()
+        session.commit()
+        return updated_data
 
 
 @app.delete(
@@ -160,8 +196,16 @@ def update_processed_agent_data(processed_agent_data_id: int, data: ProcessedAge
     response_model=ProcessedAgentDataInDB,
 )
 def delete_processed_agent_data(processed_agent_data_id: int):
-    # Delete by id
-    pass
+    with SessionLocal() as session:
+        query = (
+            processed_agent_data.delete()
+            .where(processed_agent_data.c.id == processed_agent_data_id)
+            .returning(*processed_agent_data.columns)
+        )
+        result = session.execute(query)
+        deleted_data = result.fetchone()
+        session.commit()
+        return deleted_data
 
 
 if __name__ == "__main__":
